@@ -22,6 +22,9 @@ export class ApiAdapter {
         });
     }
 
+    getInstance() {
+        return this.instance;
+    }
     // Аутентификация
     // @ts-ignore
     async authenticate(username: string, password: string): Promise<string> {
