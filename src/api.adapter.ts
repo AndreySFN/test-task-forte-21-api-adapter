@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from 'axios';
 import {ClientDto, ClientListDto} from './types';
 
 export class ApiAdapter {
-    private instance: AxiosInstance;
+    private readonly instance: AxiosInstance;
     private token: string | null = null;
 
     constructor(baseURL: string) {
