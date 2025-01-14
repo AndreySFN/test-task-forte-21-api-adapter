@@ -11,3 +11,8 @@ export interface ClientDto extends WithId{
     company: string;
     details: ClientDetailsDto;
 }
+
+export interface ClientListDto {
+    data: ClientDto[];
+    total: number;
+}

@@ -1,6 +1,6 @@
 // TODO: ts-ignores
 import axios, { AxiosInstance } from 'axios';
-import { ClientDto } from './types';
+import {ClientDto, ClientListDto} from './types';
 
 export class ApiAdapter {
     private instance: AxiosInstance;
@@ -38,7 +38,7 @@ export class ApiAdapter {
         page?: number;
         limit?: number;
         // @ts-ignore
-    }): Promise<{ data: ClientDto[]; total: number }> {
+    }): Promise<ClientListDto> {
         const response = await this.instance.get('/clients', { params: query });
         return response.data;
     }
