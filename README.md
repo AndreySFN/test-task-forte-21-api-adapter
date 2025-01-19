@@ -1,12 +1,19 @@
 # API Адаптер к тестовому заданию Форте 21
 
-## Версия: 1.0.0
+## Версия: 1.0.4
 
 ---
 
 ## Описание
 
-`ApiAdapter` предоставляет интерфейс для взаимодействия с REST API сервера, реализованного в рамках тестового задания Форте 21. Адаптер реализованный с использованием библиотеки `axios`. Адаптер включает методы для аутентификации, управления клиентами, создания, обновления и удаления данных. Подходит для интеграции с бэкендом, поддерживающим JSON-формат данных.
+`ApiAdapter` предоставляет интерфейс для взаимодействия с REST API сервера, реализованного в рамках тестового задания Форте 21.  
+Адаптер реализован с использованием библиотеки [`axios`](https://axios-http.com/).  
+Он включает методы для аутентификации, управления клиентами, а также создания, обновления и удаления данных.  
+Подходит для интеграции с бэкендом, поддерживающим JSON-формат данных.
+
+> **Важное замечание**: Все методы (кроме `getClients` и `getClientById`) требуют аутентификации. То есть, чтобы успешно вызывать методы `createClient`, `updateClient`, `deleteClient`, `getTotalClients` и т. д., вам нужно либо:
+> 1. Передать уже имеющийся токен во второй параметр конструктора,
+> 2. Или вызвать метод `authenticate(...)` с учётными данными.
 
 ---
 
@@ -20,36 +27,150 @@ npm install test-task-forte-21-api-adapter
 
 ---
 
-## Использование
+## Быстрый старт
 
 ```typescript
 import { ApiAdapter } from 'test-task-forte-21-api-adapter';
 
-// Создание экземпляра адаптера
+// Создание экземпляра адаптера с базовым URL.
+// Обратите внимание, что вы можете передать сохранённый токен вторым параметром.
 const api = new ApiAdapter('https://api.example.com');
 
-// Пример использования
 async function main() {
-    await api.authenticate('username', 'password'); // Аутентификация
-    const clients = await api.getClients(); // Получение списка клиентов
-    console.log(clients);
+  // Аутентификация
+  const token = await api.authenticate('username', 'password');
+  console.log('Token:', token);
+
+  // Получение списка клиентов (не требует аутентификации, но если вы уже авторизованы, токен будет использован)
+  const clients = await api.getClients();
+  console.log('Список клиентов:', clients);
 }
+
+main().catch(console.error);
+```
+
+---
+
+## Пример использования с сохранением токена
+
+Вы можете передавать сохранённый токен при создании экземпляра адаптера:
+
+```typescript
+// Допустим, вы сохранили токен где-то в локальном хранилище
+const savedToken = localStorage.getItem('accessToken');
+
+// Создание адаптера сразу с токеном
+const api = new ApiAdapter('https://api.example.com', savedToken || undefined);
+
+// Теперь при выполнении запросов авторизация будет происходить автоматически,
+// без дополнительного вызова метода authenticate.
 ```
 
 ---
 
 ## Конструктор
 
-### `constructor(baseURL: string)`
+### `constructor(baseURL: string, token?: string)`
 
 Создает экземпляр адаптера API.
 
 - **Параметры**:
     - `baseURL` (string): Базовый URL API.
+    - `token` (string, опционально): Токен аутентификации (если уже получен).
 
 ---
 
 ## Методы
+
+Ниже приведён код адаптера и описание методов.
+
+```typescript
+// TODO: ts-ignores
+import axios, { AxiosInstance } from 'axios';
+import { ClientDto, ClientListDto } from './types';
+
+export class ApiAdapter {
+    private readonly instance: AxiosInstance;
+    private token: string | null = null;
+
+    constructor(baseURL: string, token?: string) {
+        this.token = token || null;
+        this.instance = axios.create({
+            baseURL,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        this.instance.interceptors.request.use((config) => {
+            if (this.token) {
+                config.headers.Authorization = `Bearer ${this.token}`;
+            }
+            return config;
+        });
+    }
+
+    getInstance() {
+        return this.instance;
+    }
+
+    // Аутентификация
+    // @ts-ignore
+    async authenticate(username: string, password: string): Promise<string> {
+        const response = await this.instance.post('/auth', { username, password });
+        this.token = response.data.accessToken;
+        return String(this.token);
+    }
+
+    // Получение списка клиентов (не требует аутентификации)
+    async getClients(query?: {
+        search?: string;
+        sortField?: string;
+        sortOrder?: 'asc' | 'desc';
+        page?: number;
+        limit?: number;
+        // @ts-ignore
+    }): Promise<ClientListDto> {
+        const response = await this.instance.get('/clients', { params: query });
+        return response.data;
+    }
+
+    // Получение клиента по ID (не требует аутентификации)
+    // @ts-ignore
+    async getClientById(id: string): Promise<ClientDto> {
+        const response = await this.instance.get(`/clients/${id}`);
+        return response.data;
+    }
+
+    // Получение общего количества клиентов (требует аутентификации)
+    // @ts-ignore
+    async getTotalClients(search?: string): Promise<number> {
+        const response = await this.instance.get('/clients/total', { params: { search } });
+        return response.data.total;
+    }
+
+    // Создание нового клиента (требует аутентификации)
+    // @ts-ignore
+    async createClient(client: ClientDto): Promise<ClientDto> {
+        const response = await this.instance.post('/clients', client);
+        return response.data;
+    }
+
+    // Обновление клиента по ID (требует аутентификации)
+    // @ts-ignore
+    async updateClient(id: string, client: Partial<ClientDto>): Promise<ClientDto> {
+        const response = await this.instance.put(`/clients/${id}`, client);
+        return response.data;
+    }
+
+    // Удаление клиента по ID (требует аутентификации)
+    // @ts-ignore
+    async deleteClient(id: string): Promise<{ message: string }> {
+        const response = await this.instance.delete(`/clients/${id}`);
+        return response.data;
+    }
+}
+```
 
 ### 1. Аутентификация
 
@@ -62,11 +183,9 @@ async function main() {
     - `password` (string): Пароль пользователя.
 - **Возвращает**: Токен доступа (`string`).
 
----
+### 2. Получение списка клиентов (не требует аутентификации)
 
-### 2. Получение списка клиентов
-
-#### `async getClients(query?: { search?: string; sortField?: string; sortOrder?: 'asc' | 'desc'; page?: number; limit?: number; }): Promise<{ data: ClientDto[]; total: number }>`
+#### `async getClients(query?: { search?: string; sortField?: string; sortOrder?: 'asc' | 'desc'; page?: number; limit?: number; }): Promise<ClientListDto>`
 
 Возвращает список клиентов.
 
@@ -77,11 +196,9 @@ async function main() {
         - `sortOrder` ('asc' | 'desc'): Порядок сортировки.
         - `page` (number): Номер страницы.
         - `limit` (number): Количество записей на странице.
-- **Возвращает**: Объект с данными клиентов и общим количеством.
+- **Возвращает**: Объект с данными клиентов и общим количеством (см. `ClientListDto`).
 
----
-
-### 3. Получение клиента по ID
+### 3. Получение клиента по ID (не требует аутентификации)
 
 #### `async getClientById(id: string): Promise<ClientDto>`
 
@@ -91,9 +208,7 @@ async function main() {
     - `id` (string): Идентификатор клиента.
 - **Возвращает**: Данные клиента (`ClientDto`).
 
----
-
-### 4. Получение общего количества клиентов
+### 4. Получение общего количества клиентов (требует аутентификации)
 
 #### `async getTotalClients(search?: string): Promise<number>`
 
@@ -103,9 +218,7 @@ async function main() {
     - `search` (string, опционально): Текст для поиска.
 - **Возвращает**: Общее количество клиентов (`number`).
 
----
-
-### 5. Создание клиента
+### 5. Создание клиента (требует аутентификации)
 
 #### `async createClient(client: ClientDto): Promise<ClientDto>`
 
@@ -115,9 +228,7 @@ async function main() {
     - `client` (`ClientDto`): Объект клиента.
 - **Возвращает**: Данные созданного клиента (`ClientDto`).
 
----
-
-### 6. Обновление клиента по ID
+### 6. Обновление клиента по ID (требует аутентификации)
 
 #### `async updateClient(id: string, client: Partial<ClientDto>): Promise<ClientDto>`
 
@@ -128,9 +239,7 @@ async function main() {
     - `client` (Partial<ClientDto>): Обновленные данные клиента.
 - **Возвращает**: Обновленные данные клиента (`ClientDto`).
 
----
-
-### 7. Удаление клиента по ID
+### 7. Удаление клиента по ID (требует аутентификации)
 
 #### `async deleteClient(id: string): Promise<{ message: string }>`
 
@@ -149,32 +258,35 @@ async function main() {
 Представляет клиента.
 
 ```typescript
-export interface ClientDto extends WithId {
-    name: string;
-    company: string;
-    details: ClientDetailsDto;
+export interface ClientDto {
+  _id?: string;
+  name: string;
+  company: string;
+  details: ClientDetails;
 }
 ```
 
-### `ClientDetailsDto`
+### `ClientDetails`
 
 Представляет детализированные данные клиента.
 
 ```typescript
-export interface ClientDetailsDto extends WithId {
-    contact: string;
-    about?: string;
-    phoneNumber?: string;
+export interface ClientDetails {
+  _id?: string;
+  contact: string;
+  about?: string;
+  phoneNumber?: string;
 }
 ```
 
-### `WithId`
+### `ClientListDto`
 
-Базовый интерфейс для объектов с идентификатором.
+Тип для ответа, содержащего список клиентов и общее количество.
 
 ```typescript
-export interface WithId {
-    _id?: string;
+export interface ClientListDto {
+  data: ClientDto[];
+  total: number;
 }
 ```
 
@@ -194,8 +306,8 @@ export interface WithId {
 
 ## Технические требования
 
-- Node.js: `>=10`
-- TypeScript: `^5.7.3`
+- **Node.js**: `>=10`
+- **TypeScript**: `^5.7.3`
 
 ---
 
@@ -204,19 +316,25 @@ export interface WithId {
 ```plaintext
 src/
   types/
-    index.ts      // Типы данных (ClientDto, UserDto, WithId)
-  utils/
-    index.ts      // Утилиты
+    index.ts      // Типы данных (ClientDto, ClientListDto и т.д.)
   index.ts        // Основной API-адаптер
 ```
 
 ---
 
-## Ограничения
+## Ограничения и заметки
 
-1. **Использование `@ts-ignore`**: В некоторых методах добавлены комментарии `@ts-ignore` из-за особенностей проверки типов. Убедитесь, что это необходимо, и удалите, если возможно.
-2. **Отсутствие тестов**: Рекомендуется написать тесты для критически важных методов.
+1. **Использование `@ts-ignore`**  
+   В некоторых методах добавлены комментарии `@ts-ignore` из-за возможных особенностей проверки типов.  
+   Убедитесь, что это действительно необходимо в вашей среде разработки, и удалите комментарии, если ошибки типов устранены.
+
+2. **Отсутствие детальных тестов**  
+   Рекомендуется написать тесты для критически важных методов (например, аутентификации и CRUD-операций над клиентами).
+
+3. **Авторизация**  
+   Если вы используете уже полученный токен, передавайте его вторым параметром в конструктор.  
+   При каждом успешном вызове `authenticate(...)` токен будет перезаписан.
 
 ---
 
-Разработано с использованием `TSDX`. 
+Разработано с использованием [TSDX](https://tsdx.io). Приятного использования!
