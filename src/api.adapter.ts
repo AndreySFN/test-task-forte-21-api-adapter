@@ -6,7 +6,8 @@ export class ApiAdapter {
     private readonly instance: AxiosInstance;
     private token: string | null = null;
 
-    constructor(baseURL: string) {
+    constructor(baseURL: string, token?: string) {
+        this.token = token || null
         this.instance = axios.create({
             baseURL,
             headers: {
